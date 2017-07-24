@@ -5,11 +5,11 @@ import rsa
 import alipay_config
 import base64
 
-SIGN_TYPE = "SHA-1"
+SIGN_TYPE = "SHA-256"
 import urllib
 import requests
 import hashlib
-
+import urllib.parse
 
 def params_filter(params):
     """
@@ -23,11 +23,17 @@ def params_filter(params):
     """
     ret = {}
     for key, value in params.items():
-        if key == "sign" or key == "sign_type" or value == "":
+        if key == "sign" or value == "":#sign_type need include to sign now
             continue
         ret[key] = value
     return ret
 
+def params_escape(dict):
+    escapedDict = {}
+    for key, value in dict.items():
+        str = urllib.quote_plus(value)
+        escapedDict[key] = str
+    return escapedDict
 
 def query_to_dict(query):
     """
@@ -123,8 +129,10 @@ def make_payment_request(params_dict):
     """
     query_str = params_to_query(params_dict, quotes=True) #拼接签名字符串
     sign = make_sign(query_str) #生成签名
-    sign = urllib.quote_plus(sign)
-    res = "%s&sign=\"%s\"&sign_type=\"RSA\"" % (query_str, sign)
+    res = "%s&sign=%s" % (query_str, sign)
+    dict = query_to_dict(res)
+    dict = params_escape(dict)
+    res = params_to_query(dict)
     return res
 
 
@@ -145,7 +153,7 @@ def verify_alipay_request_sign(params_dict):
 
 def verify_from_gateway(params_dict):
     """
-    从阿里网管验证请求是否正确
+    从阿里网关验证请求是否正确
     :param params_dict:
     :return:
     """

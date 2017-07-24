@@ -5,6 +5,8 @@ from tornado import web
 import alipay_config
 import alipay_core
 from alipay_core import *
+import json
+import datetime
 
 
 host = "http://baidu.com" # 这里改为你自己的host
@@ -12,29 +14,34 @@ class MakePaymentInfo(web.RequestHandler):
     """
     构造一个支付请求
     """
-    def make_payment_info(self, out_trade_no=None, subject=None, total_fee=None, body=None):
-
-        order_info = {"partner": "%s" % (alipay_config.partner_id),
-                      "service": "mobile.securitypay.pay",
-                      "_input_charset": "utf-8",
-                      "notify_url": "http://%s/callback" % (host),
-                      #业务参数
-                      "out_trade_no": None,
-                      "paymnet_type": "1",
-                      "subject": None,
-                      "seller_id": alipay_config.alipay_account,
-                      "total_fee": 0,
-                      "body": None
+    def make_payment_info(self, out_trade_no=None, subject=None, total_amount=None, body=None, passback_params=None):
+        public = {  # public args
+            "app_id": alipay_config.appid,
+            "method": "alipay.trade.app.pay",
+            "charset": "utf-8",
+            "timestamp": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # 2014-07-24 03:07:50
+            "version": "1.0",
+            "notify_url": "https://www.your-callback-url.com/callback/alipay",
+            "sign_type": "RSA2"
         }
 
+        order_info = {"product_code": "QUICK_MSECURITY_PAY",
+                      # 业务参数
+                      "out_trade_no": None,
+                      "subject": None,
+                      "total_amount": total_amount,
+                      "body": body,
+                      }
+        if not passback_params:
+            order_info['passback_params'] = passback_params
         order_info["out_trade_no"] = "%s" % (out_trade_no)
         order_info["subject"] = "%s" % (subject)
-        if total_fee <= 0.0:
-            total_fee = 0.01
-        order_info["total_fee"] = total_fee
-        order_info["body"] = "hsh_shop"
-        return order_info
+        if total_amount <= 0.0:
+            total_amount = 0.01
+        order_info["total_amount"] = "%s" % (total_amount)
 
+        public['biz_content'] = json.dumps(order_info, ensure_ascii=False)
+        return public
 
     @gen.coroutine
     def get(self, order_id):
@@ -54,7 +61,7 @@ class MakePaymentInfo(web.RequestHandler):
 
 
 
-        total_fee = 0.01  #这里讲金额设为1分钱，方便测试
+        total_fee = 0.01  #这里将金额设为1分钱，方便测试
         body = ""
         payment_info = self.make_payment_info(out_trade_no=order_id, subject=order_id, total_fee=total_fee,
                                               body=body)
@@ -89,7 +96,13 @@ class PaymentCallBack(web.RequestHandler):
         check_sign = params_to_query(args)
         params = query_to_dict(check_sign)
         sign = params['sign']
-        params = params_filter(params)
+        toSignDict = {}
+        for k, v in params.items():
+            if k == 'sign' or k == 'sign_type':
+                continue
+            str = urllib.parse.unquote_plus(v)
+            toSignDict[k] = str
+        # params = params_filter(params)
         message = params_to_query(params,quotes=False,reverse=False) #获取到要验证签名的串
         check_res = check_ali_sign(message,sign)  #验签
 
@@ -98,15 +111,15 @@ class PaymentCallBack(web.RequestHandler):
             return
 
         #这里是去访问支付宝来验证订单是否正常
-        res = verify_from_gateway({"partner": alipay_config.partner_id, "notify_id": params["notify_id"]})
-        if res == False:
-            self.write("fail")
-            return
+        # res = verify_from_gateway({"partner": alipay_config.partner_id, "notify_id": params["notify_id"]})
+        # if res == False:
+        #     self.write("fail")
+        #     return
 
         trade_status = params["trade_status"]
         order_id = params["out_trade_no"]  #你自己构建订单时候的订单ID
         alipay_order = params["trade_no"]  #支付宝的订单号码
-        total_fee = params["total_fee"]  #支付总额
+        total_fee = params["total_amount"]  #支付总额
 
         """
         下面是处理付款完成的逻辑

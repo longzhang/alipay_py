@@ -35,5 +35,5 @@ SrwUAhZL/6pPYu36zwIDAQAB
 
 partner_id = 12345678 #支付宝后台的合作商ID
 key = "x6lmikee5cfkpv0sicx3i24qpa3yggdk"
-alipay_account="aaa@qq.com" #商家的支付宝邮箱
+appid="2017060000003217" #your appid
 
